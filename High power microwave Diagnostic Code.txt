@@ -1,0 +1,831 @@
+1     clc %clear command window
+2     clear all  % clear workspace
+3     close all 
+4     tic 
+5     
+6     %% constants
+7     c = 2.998e8;
+8     % root = 1.8412;%TE11
+9     root = 2.405;%TM01
+10    % root = 5.3314;%TE21
+11    r0 = 18e-3; %radius of waveguide
+12    dz = 60e-3; % distance between probes
+13    
+14    %% %setting up loop to name and select files 
+15    files = dir('TM01*GHz.csv');
+16    for fls = 1:length(files)
+17        fileID1 = files(fls).name; 
+18        temp = char(fileID1);
+19        filename = temp(1:end-4) 
+20       %attenuation plots waveguide
+21        fileID5 = 'TM01_coupler_probe1.csv'; fileID6 = 'TM01_coupler_probe2.csv';
+22        fileID7 = 'TM01_coupler_probe4.csv'; fileID8 = 'flann_1615-10_sn566_coupled.csv';
+23        %attenuation plots cables
+24        fileID9 = 'probe1.csv'; fileID10 = 'probe2.csv'; fileID11 = 'probe3.csv';
+25        fileID12 = 'coupler_ref.csv'; fileID13 = 'sweeper_to_coupler.csv';
+26        opts1 = detectImportOptions(fileID1); opts5 = detectImportOptions(fileID5);
+27        opts6 = detectImportOptions(fileID6); opts7 = detectImportOptions(fileID7);
+28        opts8 = detectImportOptions(fileID8); opts9 = detectImportOptions(fileID9);
+29        opts10 = detectImportOptions(fileID10); opts11 = detectImportOptions(fileID11);
+30        opts12 = detectImportOptions(fileID12); opts13 = detectImportOptions(fileID13);
+31    
+32        %read in the file using the detected options for delimination etc.
+33        [FILE1] = readtable(fileID1,'HeaderLines',22);
+34        [FILE5] = readtable(fileID5,opts5); [FILE6] = readtable(fileID6,opts6);
+35        [FILE7] = readtable(fileID7,opts7); [FILE8] = readtable(fileID8,opts8);
+36        [FILE9] = readtable(fileID9,opts9); [FILE10] = readtable(fileID10,opts10);
+37        [FILE11] = readtable(fileID11,opts11);  [FILE12] = readtable(fileID12,opts12);
+38        [FILE13] = readtable(fileID13,opts13); 
+39    
+40        %% work with data
+41        %scope measurements set time date and amp data for scope pulses RAW
+42        %DATA
+43        tscope = FILE1{1:end-1,1}.*1e9;%puts in ns
+44        refamp = FILE1{1:end-1,5}.*1e3;%puts in mV
+45        p1amp = (FILE1{1:end-1,2}.*1e3)+abs(mean(FILE1{1:end-1,2}.*1e3));%puts in mV NB DC OFFSET
+46        p2amp = FILE1{1:end-1,3}.*1e3 +abs(mean(FILE1{1:end-1,3}.*1e3))%puts in mV
+47        p4amp = (FILE1{1:end-1,4}.*1e3)+abs(mean(FILE1{1:end-1,4}.*1e3));%puts in mV NB -ve as opposite orientation
+48        %setup cal data for attenuations waveguides attenuations
+49        spf = FILE5{:,2};%freq data in GHz
+50        S11p1 = FILE5{:,3};S12p1 = FILE5{:,6};S21p1 = FILE5{:,9};
+51        S22p1 = FILE5{:,12};S11p1_phase = FILE5{:,4};S12p1_phase = FILE5{:,7};
+52        S21p1_phase = FILE5{:,10};S22p1_phase = FILE5{:,13};S11p2 = FILE6{:,3}; 
+53        S12p2 = FILE6{:,6};S21p2 = FILE6{:,9};S22p2 = FILE6{:,12};S11p2_phase = FILE6{:,4};
+54        S12p2_phase = FILE6{:,7};S21p2_phase = FILE6{:,10};S22p2_phase = FILE6{:,13};
+55        %NB probe 3 in cross-polarization with TE11 so not used (p2 does that)
+56        S11p4 = FILE7{:,3};S12p4 = FILE7{:,6};S21p4 = FILE7{:,9};
+57        S22p4 = FILE7{:,12};S11p4_phase = FILE7{:,4};S12p4_phase = FILE7{:,7};
+58        S21p4_phase = FILE7{:,10};S22p4_phase = FILE7{:,13};S11ref = FILE8{:,3};
+59        S12ref = FILE8{:,6};S21ref = FILE8{:,9};S22ref = FILE8{:,12};S11ref_phase = FILE8{:,4};
+60        S12ref_phase = FILE8{:,7};S21ref_phase = FILE8{:,10};S22ref_phase = FILE8{:,13};
+61        %cables attenuations
+62        spfc = FILE9{:,2};% freq just in case different
+63        S11p1c = FILE9{:,3}; S12p1c = FILE9{:,6};
+64        S21p1c = FILE9{:,9}; S22p1c = FILE9{:,12};
+65        S11p1c_phase = FILE9{:,4};S12p1c_phase = FILE9{:,7}; 
+66        S21p1c_phase = FILE9{:,10};S22p1c_phase = FILE9{:,13};
+67        S11p2c = FILE10{:,3}; S12p2c = FILE10{:,6}; 
+68        S21p2c = FILE10{:,9}; S22p2c = FILE10{:,12};
+69        S11p2c_phase = FILE10{:,4};S12p2c_phase = FILE10{:,7}; 
+70        S21p2c_phase = FILE10{:,10};S22p2c_phase = FILE10{:,13};
+71        S11p4c = FILE11{:,3}; S12p4c = FILE11{:,6}; 
+72        S21p4c = FILE11{:,9}; S22p4c = FILE11{:,12};
+73        S11p4c_phase = FILE11{:,4};S12p4c_phase = FILE11{:,7}; 
+74        S21p4c_phase = FILE11{:,10};S22p4c_phase = FILE11{:,13};
+75        S11refc = FILE12{:,3}; S12refc = FILE12{:,6}; 
+76        S21refc = FILE12{:,9}; S22refc = FILE12{:,12};
+77        S11refc_phase = FILE12{:,4};S12refc_phase = FILE12{:,7}; 
+78        S21refc_phase = FILE12{:,10};S22refc_phase = FILE12{:,13};
+79        S11swp = FILE13{:,3}; S12swp = FILE13{:,6}; 
+80        S21swp = FILE13{:,9}; S22swp = FILE13{:,12};
+81        S11swp_phase = FILE13{:,4};S12swp_phase = FILE13{:,7}; 
+82        S21swp_phase = FILE13{:,10};S22swp_phase = FILE13{:,13};
+83    %% Gets spectrial content, setup for FFT
+84        NFFT = 2^nextpow2(length(tscope)); % Next power of 2 from length of y
+85        %find time step
+86        dt = (tscope(end) - tscope(end-1)).*1e-9;%time step
+87        DT = dt*1e9;%timestep in ns corresponding sample rate
+88        fsample = 1./dt; %resultant frequency axis for FFT
+89        f = 1e-9.*(fsample/2).*linspace(0,1,NFFT/2+1);
+90    
+91        % FFT
+92        Yref = fft(refamp,NFFT)./length(tscope);Yref = abs(Yref(1:NFFT/2+1));
+93        Yp1 = fft(p1amp,NFFT)./length(tscope);Yp1 = abs(Yp1(1:NFFT/2+1));
+94        Yp2 = fft(p2amp,NFFT)./length(tscope);Yp2 = abs(Yp2(1:NFFT/2+1));
+95        Yp4 = fft(p4amp,NFFT)./length(tscope);Yp4 = abs(Yp4(1:NFFT/2+1));
+96    
+97        kc = root./r0;  
+98        omegac = kc*c; % angular frequency 
+99        fc = 1e-9.*omegac./(2*pi); %cutoff frequency
+100       cutofff = find(f >fc,1,'first');
+101       resfreq = find(Yp1 == max(Yp1(cutofff:end)));
+102       % find biggest frequency after cutoff
+103       kz = sqrt((2*pi*1e9.*f(resfreq)./c)^2 - (root./r0)^2);
+104       %propagation constant
+105       lambdaz = 2*pi./kz; %waveguide wavelength
+106       vphanalytic = 1e9*2*pi*f(resfreq)./kz; %velocity in guide
+107       transtimeTM01 = (dz/vphanalytic).*1e9%transit time in ns
+108       
+109       %% FFT check
+110       Maxref= max(Yref);
+111   index = find(Yref == Maxref);
+112   freqMaxREF = f(index);
+113   
+114   Y = round(freqMaxREF,1)
+115   minValue = Y
+116   if freqMaxREF < minValue  
+117      Freqmaxref1 = freqMaxREF+(minValue-freqMaxREF)
+118   else Freqmaxref1 = freqMaxREF
+119   end
+120   %% Further Code: to max sure frequency falls within range 9.3-9.8Ghz
+121   % if this step is not taken program will fail if frequency falls out of
+122   % range oscilloscope measured
+123   Maxp1 = max(Yp1);
+124   index = find(Yp1 == Maxp1);
+125   freqMaxp1 = f(index);
+126   Y = round(freqMaxp1,1)
+127   minValue = Y
+128   if freqMaxREF < minValue  
+129      Freqmaxp11= freqMaxp1+(minValue-freqMaxp1)
+130   else Freqmaxp11 = freqMaxp1
+131   end
+132   
+133   if Freqmaxp11 == freqMaxREF 
+134       disp(1) %check to see if 
+135   else disp(0)
+136   end
+137   Maxp2 = max(Yp2); % at 0Hz DC there is a spike in intensity 2x that at 9.55GHz. 
+138   index = find(Yp2 == Maxp2) ;
+139   freqMaxp2 = f(index);
+140   Y = round(freqMaxp2,1)
+141   minValue = Y
+142   if freqMaxp2 < minValue  
+143      Freqmaxp21 = freqMaxp2+(minValue-freqMaxp2)
+144   else Freqmaxp21 = freqMaxp2
+145   end
+146   Maxp4 = max(Yp4);
+147   index = find(Yp4 == Maxp4);
+148   freqMaxp4 = f(index);
+149   Y = round(freqMaxp4,1)
+150   minValue = Y
+151   if freqMaxp4 < minValue  
+152      Freqmaxp41 = freqMaxp4+(minValue-freqMaxp4)
+153   else Freqmaxp41 = freqMaxp4
+154   end
+155   
+156   %% Finds the attenuation of the cables at each frequency
+157   [freqref] = [spfc,S21refc];
+158   aresultREFc = interp1(freqref(:,1),freqref(:,1),Freqmaxref1,'nearest');
+159   attenREFc = find(freqref(:,1) ==aresultREFc);
+160   cableattenuationREF = S21refc(attenREFc);
+161   [freqp1] = [spfc,S21p1c];
+162   aresultP1c = interp1(freqp1(:,1),freqp1(:,1),Freqmaxp11,'nearest');
+163   attenP1c = find(freqp1(:,1) ==aresultP1c);
+164   cableattenuationP1 = S21p1c(attenP1c);
+165   [freqp2] = [spfc,S21p2c];
+166   aresultP2c = interp1(freqp2(:,1),freqp2(:,1),Freqmaxp21,'nearest');
+167   attenP2c = find(freqp2(:,1) ==aresultP2c);
+168   cableattenuationP2 = S21p2c(attenP2c);
+169   [freqp4] = [spfc,S21p1c];
+170   aresultP4c = interp1(freqp4(:,1),freqp4(:,1),Freqmaxp41,'nearest');
+171   attenP4c = find(freqp4(:,1) ==aresultP4c);
+172   cableattenuationP4 = S21p4c(attenP4c);
+173   %% find S parameter to probes at each frequency
+174   [Sp1] = [spf,S21p1];
+175   aresultSp1 = interp1(Sp1(:,1),Sp1(:,1),Freqmaxp11,'nearest');
+176   attenSp1 = find(Sp1(:,1) == aresultSp1);
+177   attenuationSp1 = S21p1(attenSp1);[Sp2] = [spf,S21p2];
+178   aresultSp2 = interp1(Sp2(:,1),Sp2(:,1),Freqmaxp21,'nearest');
+179   attenSp2 = find(Sp2(:,1) == aresultSp2);
+180   attenuationSp2 = S21p2(attenSp1);[Sp4] = [spf,S21p4];
+181   aresultSp4 = interp1(Sp4(:,1),Sp4(:,1),Freqmaxp41,'nearest');
+182   attenSp4 = find(Sp4(:,1) == aresultSp4);
+183   attenuationSp4 = S21p4(attenSp1);
+184   [SpREF] = [spf,S21ref];
+185   aresultSpREF = interp1(SpREF(:,1),SpREF(:,1),Freqmaxref1,'nearest');
+186   attenSpREF = find(SpREF(:,1) == aresultSpREF);
+187   attenuationSpREF = S21ref(attenSpREF);
+188   %with attenuation accounted for
+189   input = refamp./10^((attenuationSpREF+cableattenuationREF)/20);
+190   p1ampADJ = p1amp./10^((attenuationSp1+cableattenuationP1)/20);
+191   %p2ampADJ =
+192   %p2amp+p2amp*10^(attenuationSp2/20)+p2amp*10^(cableattenuationP2/20)
+193   p4ampADJ = p4amp./10^((attenuationSp4+cableattenuationP4)/20);
+194   absoluteinput= max(input) ;
+195   absolutep1 = max(p1ampADJ);
+196   absolutep4 = max(p4ampADJ);
+197   ratiop1 = absoluteinput/absolutep1;
+198   ratiop4 = absoluteinput/absolutep4;
+199   dBratio = 20*log10(ratiop1);
+200   dBratio4 = 20*log10(ratiop4);
+201   
+202   %% plots from data
+203   
+204   fig1 = figure(1);%figure('Position',[600 100 900 900],'Visible','on');
+205   % axes1 = axes('Parent',fig1,'Position',[0.1 0.2 0.85 0.7]);
+206   % set(gcf,'PaperPositionMode','auto'), gn1 = subplot(2,2,1); ax1 =
+207   % get(gn1,'position'); set(gn1,'position',ax1);
+208   subplot(3,2,1)
+209   plot(tscope,refamp)
+210   xlim([tscope(1) tscope(end)]), 
+211   ylim([min(refamp)*1.1 max(refamp)*1.1]),
+212   title('Reference');xlabel('time / ns'); 
+213   ylabel('amp / mV');set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+214   grid on
+215   
+216   subplot(3,2,2)
+217   plot(tscope,p1amp)
+218   xlim([tscope(1) tscope(end)]), 
+219   ylim([min(p1amp)*1.1 max(p1amp)*1.1]),
+220   title('probe1');xlabel('time / ns'); ylabel('amp / mV');
+221   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+222   grid on
+223   % hold off
+224   
+225   % gn1 = subplot(2,2,3); ax1 = get(gn1,'position'); set(gn1,'position',ax1);
+226   subplot(3,2,3)
+227   plot(tscope,p2amp)
+228   xlim([tscope(1) tscope(end)]) ;ylim([min(p1amp)*1.1 max(p1amp)*1.1]),
+229   title('probe2');xlabel('time / ns'); ylabel('amp / mV');
+230   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);grid on
+231   % hold off
+232   
+233   % gn1 = subplot(2,2,4); ax1 = get(gn1,'position'); set(gn1,'position',ax1);
+234   subplot(3,2,4);plot(tscope,p4amp);xlim([tscope(1) tscope(end)])
+235   ylim([min(p1amp)*1.1 max(p1amp)*1.1]),
+236   title('probe4');xlabel('time / ns'); ylabel('amp / mV');
+237   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+238   grid on
+239   
+240   subplot(3,2,5)
+241   plot(tscope,input)
+242   xlim([tscope(1) tscope(end)]), 
+243   ylim([min(input)*1.1 max(input)*1.1]),
+244   title('RefampADJ(Input)');xlabel('time / ns');ylabel('amp / mV');
+245   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+246   grid on
+247   
+248   subplot(3,2,6)
+249   plot(tscope,input,'r',tscope,p1ampADJ,'b')
+250   %tscope,refamp,'y'
+251   xlim([tscope(1) tscope(end)]), 
+252   ylim([min(input)*1.1 max(input)*1.1]),
+253   title('input vs p1ADJ');xlabel('time / ns'); ylabel('amp / mV');
+254   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+255   grid on
+256   
+257   fig2 = figure(2)
+258   subplot(1,3,1)
+259   plot(tscope,input,'r')
+260   xlim([tscope(1) tscope(end)]), 
+261   ylim([min(input)*1.1 max(input)*1.1]),
+262   title('Input');xlabel('time / ns'); ylabel('amp / mV');
+263   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+264   
+265   subplot(1,3,2)
+266   plot(tscope,p1ampADJ,'b')
+267   %tscope,refamp,'y'
+268   xlim([tscope(1) tscope(end)]), 
+269   ylim([min(input)*1.1 max(input)*1.1]),
+270   title('P1ampAdjusted');xlabel('time / ns'); ylabel('amp / mV');
+271   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+272   
+273   subplot(1,3,3)
+274   plot(tscope,p4ampADJ,'b')
+275   %tscope,refamp,'y'
+276   xlim([tscope(1) tscope(end)]), 
+277   ylim([min(input)*1.1 max(input)*1.1]),
+278   title('P4ampAdjusted');xlabel('time / ns'); ylabel('amp / mV');
+279   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+280   
+281   zHeightConstp1 = p1ampADJ(5000:12000) 
+282   zPeakp1 = findpeaks(zHeightConstp1)
+283   meanPp1 = mean(zPeakp1)
+284   
+285   % zHeightConstp2 = p2ampADJ(5000:12000) zPeakp2 = findpeaks(zHeightConstp2)
+286   % meanPp2 = mean(zPeakp2)
+287   
+288   zHeightConstp4 = p4ampADJ(5000:12000) 
+289   zPeakp4 = findpeaks(zHeightConstp4)
+290   meanPp4 = mean(zPeakp4)
+291   
+292   zHeightConstInput = input(5000:12000) 
+293   zPeakInp = findpeaks(zHeightConstInput)
+294   meanPinp = mean(zPeakInp)
+295   
+296   MaxAmpINP = max(input); % calculated peak of input
+297   MaxAmpP1 = max(p1ampADJ);% ^ for P1
+298   MaxAmpRatioRp1 = meanPinp/meanPp1; % compares ^^
+299   MaxAmpRatioRp4 = meanPinp/meanPp4
+300   
+301   dbRp1(fls) = -20*log10(MaxAmpRatioRp1) % unexplained difference in dB
+302   dbRp4(fls) = -20*log10(MaxAmpRatioRp4)
+303   
+304   
+305   
+306   root01 = 2.405
+307   kc01 = root01./r0; 
+308   omegac01 = kc01*c;
+309   fc01 = 1e-9.*omegac01./(2*pi);
+310   cutofff01 = find(f >fc01,1,'first');
+311   resfreq01 = find(Yp1 == max(Yp1(cutofff01:end)));
+312   kz01 = sqrt((2*pi*1e9.*f(resfreq01)./c)^2 - (root01./r0)^2)
+313   lambdaz01 = 2*pi./kz01
+314   vphasealytic01 = 1e9*2*pi*f(resfreq01)./kz01
+315   transtimeTM01 = (dz/vphasealytic01).*1e9
+316   
+317   root = 1.8412
+318       kc = root./r0;
+319       omegac = kc*c;
+320       fc = 1e-9.*omegac./(2*pi);
+321       cutofff = find(f >fc,1,'first');
+322       resfreq = find(Yp1 == max(Yp1(cutofff:end)));
+323       kz = sqrt((2*pi*1e9.*f(resfreq)./c)^2 - (root./r0)^2);
+324       lambdaz = 2*pi./kz;
+325       vphanalytic = 1e9*2*pi*f(resfreq)./kz;
+326       transtimeTE11 = (dz/vphanalytic).*1e9%transit time in ns
+327   
+328   % hold off
+329   
+330   %% FFTS of raw data 
+331   fig3 = figure(3);%figure('Position',[600 100 900 900],'Visible','on');
+332   % axes1 = axes('Parent',fig1,'Position',[0.1 0.2 0.85 0.7]);
+333   % set(gcf,'PaperPositionMode','auto'), gn1 = subplot(2,2,1); ax1 =
+334   % get(gn1,'position'); set(gn1,'position',ax1);
+335   subplot(2,2,1)
+336   plot(f',Yref),
+337   xlim([9 10]), 
+338   title('ref signal FFT')
+339   xlabel('freq / GHz'); 
+340   ylabel('mV/GHz/ns');
+341   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+342   grid on
+343   
+344   % gn1 = subplot(2,2,2); ax1 = get(gn1,'position'); set(gn1,'position',ax1);
+345   subplot(2,2,2)
+346   plot(f',Yp1),
+347   xlim([9 10]), 
+348   title('Probe 1 signal FFT')
+349   xlabel('freq / GHz'); 
+350   ylabel('mV/GHz/ns');
+351   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+352   grid on
+353   
+354   % gn1 = subplot(2,2,3); ax1 = get(gn1,'position'); set(gn1,'position',ax1);
+355   subplot(2,2,3)
+356   plot(f',Yp2),
+357   xlim([9 10]), 
+358   title('Probe 2 signal FFT')
+359   xlabel('freq / GHz'); 
+360   ylabel('mV/GHz/ns');
+361   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+362   grid on
+363   
+364   % gn1 = subplot(2,2,4); ax1 = get(gn1,'position'); set(gn1,'position',ax1);
+365   subplot(2,2,4)
+366   plot(f',Yp4),
+367   xlim([9 10]), 
+368   title('Probe 4 signal FFT')
+369   xlabel('freq / GHz'); 
+370   ylabel('mV/GHz/ns');
+371   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+372   grid on
+373   
+374   %% calibrations
+375   fig4 = figure(4);
+376   plot(spf,S11p1,spf,S12p1,spf,S21p1,spf,S22p1,'linewidth',2);
+377   title('S-parameter measurement to probe 1 (dB)');
+378   ylabel('dB')
+379   xlabel('freq / GHz')
+380   legend('S11','S12','S21','S22');
+381   legend('location','SO','orientation','horizontal');
+382   ylim([-60 5])
+383   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+384   grid on
+385   
+386   fig5 = figure(5);
+387   plot(spf,S11p2,spf,S12p2,spf,S21p2,spf,S22p2,'linewidth',2);
+388   title('S-parameter measurement to probe 2 (dB)');
+389   legend('S11','S12','S21','S22');
+390   legend('location','SO','orientation','horizontal');
+391   ylim([-90 5])
+392   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+393   grid on
+394   
+395   fig6 = figure(6);
+396   plot(spf,S11p4,spf,S12p4,spf,S21p4,spf,S22p4,'linewidth',2);
+397   title('S-parameter measurement to probe 4 (dB)');
+398   legend('S11','S12','S21','S22');
+399   legend('location','SO','orientation','horizontal');
+400   ylim([-90 5])
+401   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+402   grid on
+403   
+404   fig7 = figure(7);
+405   plot(spf,S11ref,spf,S12ref,spf,S21ref,spf,S22ref,'linewidth',2);
+406   title('S-parameter measurement to ref (dB)');
+407   legend('S11','S12','S21','S22');
+408   legend('location','SO','orientation','horizontal');
+409   ylim([-60 5])
+410   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+411   grid on
+412   
+413   fig8 = figure(8);
+414   plot(spfc,S21p1c,spfc,S21p2c,spfc,S21p4c,spfc,S21refc,...
+415       spfc,S21swp,'linewidth',2);
+416   title('Transmission measurement: cables (dB)');
+417   legend('probe 1','probe 2','probe 4','ref','sweeper');
+418   legend('location','SO','orientation','horizontal');
+419   ylim([-5 0])
+420   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+421   grid on
+422   
+423   fig9= figure(9);
+424   plot(tscope,p1amp,tscope-transtimeTM01,p4amp,'linewidth',2)
+425   xlim([-5 5]), 
+426   title(strcat('TE_1_1 Probes 1 & 4, TOF:',{' '},num2str(transtimeTE11),'ns'))
+427   xlabel('time / ns'); 
+428   ylabel('amp / mV');
+429   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+430   grid on
+431   
+432   fig10 = figure(10);
+433   subplot(2,2,1)
+434   plot(tscope,p1amp,tscope-transtimeTE11,p4amp,'linewidth',2)
+435   xlim([-1 2]), 
+436   title(strcat('TE_1_1 Probes 1 & 4, TOF:',{' '},num2str(transtimeTE11),'ns'))
+437   xlabel('time / ns'); 
+438   ylabel('amp / mV');
+439   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+440   grid on
+441   % %-D*dt*1e9
+442   %(strcat('TE_1_1 Probes 1 & 4, TOF:',{' '},transtimeTE11))
+443   
+444   subplot(2,2,3)
+445   plot(tscope,p1amp,tscope-transtimeTM01,p4amp,'linewidth',2)
+446   xlim([-1 2]), 
+447   title(strcat('TM_0_1 Probes 1 & 4, TOF:',{' '},num2str(transtimeTM01),'ns'))
+448   xlabel('time / ns'); 
+449   ylabel('amp / mV');
+450   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+451   grid on
+452   %transtimeTE11
+453   
+454   subplot(2,2,2)
+455   plot(tscope,p1amp,tscope-transtimeTE11,p4amp,'linewidth',2)
+456   xlim([193 196]), 
+457   title(strcat('TE_1_1 Probes 1 & 4, TOF:',{' '},num2str(transtimeTE11),'ns'))
+458   xlabel('time / ns'); 
+459   ylabel('amp / mV');
+460   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+461   grid on
+462   % %-D*dt*1e9
+463   %(strcat('TE_1_1 Probes 1 & 4, TOF:',{' '},transtimeTE11))
+464   
+465   subplot(2,2,4)
+466   plot(tscope,p1amp,tscope-transtimeTM01,p4amp,'linewidth',2)
+467   xlim([193 196]),
+468   title(strcat('TM_0_1 Probes 1 & 4, TOF:',{' '},num2str(transtimeTM01),'ns'))
+469   xlabel('time / ns'); 
+470   ylabel('amp / mV');
+471   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+472   grid on
+473       
+474       
+475       %% sort out the time of flight bit
+476       %need to have a common timebase for finddelay to work properly, but
+477       %want to adjust the position of p4 signal so it's in-line with p1
+478     
+479       %first thing: shift the p4 data to approx position using the analytic
+480       %estimate of the time difference, then find all the zero crossings
+481       
+482       P1amp = p1amp;%(1:end-tad);
+483       Tscope = tscope;%(1:end-tad);
+484       Tscope2 = tscope-transtimeTM01;%(1:end-tad);
+485       P4amp = p4amp;%(tad+1:end);
+486       
+487       m = 1;
+488       for n = 1:length(Tscope)-1
+489           X = P1amp(n+1).*P1amp(n);
+490           if X <0
+491               x1s(m) = Tscope(n);
+492               x2s(m) = Tscope(n+1);
+493               y1s(m) = abs(P1amp(n));
+494               y2s(m) = abs(P1amp(n+1));
+495               m = m+1;
+496           end
+497       end   
+498       
+499       m = 1;
+500       for n = 1:length(Tscope2)-1
+501           Y = P4amp(n+1).*P4amp(n);
+502           if Y <0
+503               xx1s(m) = Tscope2(n);
+504               xx2s(m) = Tscope2(n+1);
+505               yy1s(m) = abs(P4amp(n));
+506               yy2s(m) = abs(P4amp(n+1));
+507               m = m+1;
+508           end
+509       end
+510   
+511       %now determine the locations of the crossings themselves
+512       for m = 1:length(x1s)
+513           if y2s(m) < 0
+514               tcross(m) = x2s(m)-(y2s(m)*(x2s(m)-x1s(m))./(y1s(m)+y2s(m)));
+515           else
+516               tcross(m) = x1s(m)+(y1s(m)*(x2s(m)-x1s(m))./(y1s(m)+y2s(m)));
+517           end
+518       end
+519       
+520       for m = 1:length(xx1s)
+521           if yy2s(m) < 0
+522               ttcross(m) = xx2s(m)-(yy2s(m)*(xx2s(m)-xx1s(m))./(yy1s(m)+yy2s(m)));
+523           else
+524               ttcross(m) = xx1s(m)+(yy1s(m)*(xx2s(m)-xx1s(m))./(yy1s(m)+yy2s(m)));
+525           end
+526       end   
+527       
+528       %now do a slight adjustment to match up the zeros. Needs to be over the
+529       %'unifrom bit of the pulse
+530       x1 = find(tcross >50,1,'first'); x2 = find(tcross >150,1,'first');    
+531       xx1 = find(ttcross >50,1,'first'); xx2 = find(ttcross >150,1,'first'); 
+532       
+533       if abs(ttcross(xx1) - tcross(x1)) > DT
+534           'fnd1'
+535           if (ttcross(xx1) - tcross(x1)) > DT
+536               'p1fast'
+537               ttcross = ttcross+(tcross(x1+1) - ttcross(xx1))*2;
+538               x1 = x1+1;
+539               x2 = x2+1;
+540           else
+541               'p4fast'
+542               xx1 = xx1+1;
+543               xx2 = xx2+1;
+544           end
+545       end  
+546       
+547       tdiff = ttcross(xx1:xx2) - tcross(x1:x2);
+548       tdiffave = mean(tdiff)
+549       
+550       TOF = transtimeTM01 +tdiffave;
+551       tp4 = Tscope2 - tdiffave;
+552          
+553       
+554       %% plot figures
+555       
+556       fig11 = figure(11);
+557       subplot(2,2,1)
+558       plot(tscope,p1amp,tscope,p4amp,'linewidth',2)
+559       xlim([-2 2]), 
+560       title(strcat('TM_0_1 Probes 1 & 4 raw data:',{' '},filename(6:end)))
+561       xlabel('time / ns'); 
+562       ylabel('amp / mV');
+563       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+564       grid on
+565   
+566       subplot(2,2,2)
+567       plot(tscope,p1amp,tscope,p4amp,'linewidth',2)
+568       xlim([196 198]), 
+569       title(strcat('TM_0_1 Probes 1 & 4 raw data:',{' '},filename(6:end)))
+570       xlabel('time / ns'); 
+571       ylabel('amp / mV');
+572       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+573       grid on
+574   
+575       subplot(2,1,2)
+576       plot(tscope,p1amp,tscope,p4amp,'linewidth',2)
+577       xlim([50 51]), 
+578       title(strcat('TM_0_1 Probes 1 & 4 raw data:',{' '},filename(6:end)))
+579       xlabel('time / ns'); 
+580       ylabel('amp / mV');
+581       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+582       grid on
+583       %%
+584       fig12 = figure(12);
+585       subplot(2,2,1)
+586       plot(Tscope,P1amp,Tscope2,P4amp,...
+587           tcross,zeros(length(tcross),1),'o',...
+588           ttcross,zeros(length(ttcross),1),'o','linewidth',2)
+589       xlim([-1 1]), 
+590       title(strcat('TM_0_1 Probes 1 & 4 t-adjust analytic estimate:',{' '},...
+591            num2str(transtimeTM01),'ns',{' '},filename(6:end)))
+592       xlabel('time / ns'); 
+593       ylabel('amp / mV');
+594       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+595       grid on
+596   
+597       subplot(2,2,2)
+598       plot(Tscope,P1amp,Tscope2,P4amp,...
+599           tcross,zeros(length(tcross),1),'o',...
+600           ttcross,zeros(length(ttcross),1),'o','linewidth',2)
+601       xlim([195 197]), 
+602       title(strcat('TM_0_1 Probes 1 & 4 t-adjust analytic estimate:',{' '},...
+603            num2str(transtimeTM01),'ns',{' '},filename(6:end)))
+604       xlabel('time / ns'); 
+605       ylabel('amp / mV');
+606       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+607       grid on
+608   
+609       subplot(2,1,2)
+610       plot(Tscope,P1amp,'*-',Tscope2,P4amp,...
+611           tcross,zeros(length(tcross),1),'o',...
+612           ttcross,zeros(length(ttcross),1),'o','linewidth',2)
+613       xlim([50.01 50.02]), 
+614       title(strcat('TM_0_1 Probes 1 & 4 t-adjust analytic estimate:',{' '},...
+615            num2str(round(transtimeTM01,3)),'ns',{' '},filename(6:end)))
+616       xlabel('time / ns'); 
+617       ylabel('amp / mV');
+618       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+619       grid on
+620       
+621       fig13 = figure(13);
+622       subplot(2,2,1)
+623       plot(Tscope,P1amp,tp4,P4amp,...
+624           tcross,zeros(length(tcross),1),'o',...
+625           ttcross-tdiffave,zeros(length(ttcross),1),'o','linewidth',2)
+626       xlim([-1 1]), 
+627       title(strcat('TM_0_1 Probes 1 & 4 t-adust data:',{' '},num2str(round(TOF,3)),'ns',...
+628           filename(6:end)))
+629       xlabel('time / ns'); 
+630       ylabel('amp / mV');
+631       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+632       grid on
+633   
+634       subplot(2,2,2)
+635       plot(Tscope,P1amp,tp4,P4amp,...
+636           tcross,zeros(length(tcross),1),'o',...
+637           ttcross-tdiffave,zeros(length(ttcross),1),'o','linewidth',2)
+638       xlim([195 197]), 
+639       title('TM_0_1 Probes 1 & 4 raw data')
+640       xlabel('time / ns'); 
+641       ylabel('amp / mV');
+642       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+643       grid on
+644   
+645       subplot(2,1,2)
+646       plot(Tscope,P1amp,'*-',tp4,P4amp,...
+647           tcross,zeros(length(tcross),1),'o',...
+648           ttcross-tdiffave,zeros(length(ttcross),1),'o','linewidth',2)
+649       xlim([50.01 50.02]), 
+650       title('TM_0_1 Probes 1 & 4 raw data')
+651       xlabel('time / ns'); 
+652       ylabel('amp / mV');
+653       set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+654       grid on    
+655       
+656          
+657   %     % save figs once sorted
+658   %     saveas(fig1,strcat(filename,'_rawamp'),'png');
+659   %     saveas(fig1,strcat(filename,'_rawamp'),'fig');
+660   %     saveas(fig2,strcat(filename,'_ampADJ'),'png');
+661   %     saveas(fig2,strcat(filename,'_ampADJ'),'fig');
+662   %     saveas(fig3,strcat(filename,'_FFT'),'png');
+663   %     saveas(fig3,strcat(filename,'_FFT'),'fig');
+664   %     saveas(fig4,strcat(filename,'_attenp1'),'png');
+665   %     saveas(fig4,strcat(filename,'_attenp1'),'fig');
+666   %     saveas(fig5,strcat(filename,'_attenp2'),'png');
+667   %     saveas(fig5,strcat(filename,'_attenp2'),'fig');
+668   %     saveas(fig6,strcat(filename,'_attenp4'),'png');
+669   %     saveas(fig6,strcat(filename,'_attenp4'),'fig');
+670   %     saveas(fig7,strcat(filename,'_attenREF'),'png');
+671   %     saveas(fig7,strcat(filename,'_attenREF'),'fig');
+672   %       saveas(fig8,strcat(filename,'_attenCable'),'png');
+673   %     saveas(fig8,strcat(filename,'_attenCable'),'fig');
+674   %       saveas(fig9,strcat(filename,'_TOF'),'png');
+675   %     saveas(fig9,strcat(filename,'_TOF'),'fig');
+676   %       saveas(fig10,strcat(filename,'_TOFcomp'),'png');
+677   %     saveas(fig10,strcat(filename,'_TOFcomp'),'fig');
+678   %           saveas(fig11,strcat(filename,'_RawSig'),'png');
+679   %     saveas(fig11,strcat(filename,'_RawSig'),'fig');
+680   %       saveas(fig12,strcat(filename,'_AnalyticEdit'),'png');
+681   %     saveas(fig12,strcat(filename,'_AnalyticEdit'),'fig');
+682   %      saveas(fig13,strcat(filename,'_ExperimentalEdit'),'png');
+683   %     saveas(fig13,strcat(filename,'_ExperimentalEdit'),'fig');
+684        
+685        
+686   
+687   
+688       Tmath(fls)= transtimeTM01;
+689       Tcode(fls) = TOF;
+690       FREQ(fls) = f(resfreq);
+691       timeout(fls) = tdiffave;
+692       vphout(fls) = vphanalytic;
+693       
+694   end
+695   
+696   diffts = Tmath-Tcode;
+697   
+698   toc 
+699   %% after stuff
+700   
+701   
+702   fig14 = figure(14)
+703   plot(FREQ,Tmath,'*',FREQ,Tcode,'o',FREQ,Tmath-Tcode,'r+')
+704   xlabel('Frequency GHz')
+705   ylabel('Effective Phase TOF') 
+706   title('Analytic vs Measured Results TM01')
+707   xlim([9.2 9.9])
+708   ylim([-0.02 0.18])
+709   
+710   legend('analytic','measured','Difference')
+711   legend('location','EO')
+712   grid on 
+713   
+714   
+715   fig15 = figure(15)
+716   subplot(1,2,1)
+717   plot(FREQ,dbRp1,'o')
+718   grid on 
+719   ylabel('dB')
+720   xlabel('Frequency GHz')
+721   title('unaccounted attenuation at probe 1')
+722   
+723   ylim([min(dbRp1)-0.2 0.1])
+724   xlim([9.2 9.9])
+725   yline(0)
+726   
+727   subplot(1,2,2)
+728   plot(FREQ,dbRp4,'o')
+729   grid on 
+730   ylabel('dB')
+731   xlabel('Frequency GHz')
+732   title('unaccounted attenuation at probe 4')
+733   yline(0)      
+734   ylim([min(dbRp4)-0.2 max(dbRp4)+0.2])
+735   xlim([9.2 9.9])
+736   
+737   diffdb = abs((dbRp1) - (dbRp4))
+738   
+739   fig16 = figure(16)
+740   plot(FREQ,diffdb,'+')
+741   xlim([9.2 9.9])
+742   ylim([-0.1 2.5])
+743   xlabel('Frequency/GHz')
+744   ylabel('dB')
+745   title('Unaccounted attenuation between probe 1&4')
+746   yline(0)
+747   grid on 
+748   
+749   fig17 = figure(17)
+750   subplot(2,2,1)
+751   plot(spf,S11p1,spf,S12p1,spf,S21p1,spf,S22p1,'linewidth',2);
+752   title('S-parameter measurement to probe 1 (dB)');
+753   ylabel('dB')
+754   xlabel('freq / GHz')
+755   legend('S11','S12','S21','S22');
+756   legend('location','SO','orientation','horizontal');
+757   ylim([-60 5])
+758   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+759   grid on
+760   
+761   
+762   subplot(2,2,2)
+763   plot(spf,S11p2,spf,S12p2,spf,S21p2,spf,S22p2,'linewidth',2);
+764   title('S-parameter measurement to probe 2 (dB)');
+765   legend('S11','S12','S21','S22');
+766   legend('location','SO','orientation','horizontal');
+767   ylim([-90 5])
+768   xlabel('freq / GHz')
+769   ylabel('dB')
+770   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+771   grid on
+772   
+773   subplot(2,2,3)
+774   
+775   plot(spf,S11p4,spf,S12p4,spf,S21p4,spf,S22p4,'linewidth',2);
+776   title('S-parameter measurement to probe 4 (dB)');
+777   legend('S11','S12','S21','S22');
+778   legend('location','SO','orientation','horizontal');
+779   ylim([-90 5])
+780   xlabel('freq / GHz')
+781   ylabel('dB')
+782   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+783   grid on
+784   
+785   subplot(2,2,4)
+786   plot(spf,S11ref,spf,S12ref,spf,S21ref,spf,S22ref,'linewidth',2);
+787   title('S-parameter measurement to ref (dB)');
+788   legend('S11','S12','S21','S22');
+789   legend('location','SO','orientation','horizontal');
+790   ylim([-60 5])
+791   xlabel('freq / GHz')
+792   ylabel('dB')
+793   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+794   grid on
+795   
+796   fig18 = figure(18) 
+797   subplot(1,2,1)
+798   plot(spfc,S21p1c,spfc,S21p2c,spfc,S21p4c,spfc,S21refc,...
+799       spfc,S21swp,'linewidth',2);
+800   title('Transmission measurement: cables (dB)');
+801   legend('probe 1','probe 2','probe 4','ref','sweeper');
+802   legend('location','SO','orientation','horizontal');
+803   ylim([-5 0])
+804   xlabel('freq / GHz')
+805   ylabel('dB')
+806   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+807   grid on
+808   
+809   subplot(1,2,2) 
+810   plot(spfc,S21p1c+S21p1+S21swp,spfc,S21p4c+S21p4+S21swp,spfc,S21p2c+S21p2+S21swp,spfc,S21ref+S21refc+S21swp)
+811   ylim([-100 0])
+812   xlim([9.3 9.8])
+813   xlabel('freq / GHz')
+814   ylabel('dB')
+815   title('Total Accounted for Attenuation');
+816   legend('probe 1','probe 4','probe 2','ref');
+817   legend('location','SO','orientation','horizontal');
+818   set(gca,'fontsize',14,'fontweight','bold','linewidth',2);
+819   grid on
+820   % 
+821   %     saveas(fig14,'AnaVsMeaTM01','png');
+822   %     saveas(fig14,'AnaVsMeaTM01','fig');
+823   %        saveas(fig15,'UnaccountattenTM01','png');
+824   %     saveas(fig15,'UnaccountattenTM01','fig');
+825   %        saveas(fig16,'unaccountDiffTM01','png');
+826   %     saveas(fig16,'unaccountDiffTM01','fig');
+827   %        saveas(fig17,'SparaProbeTM01','png');
+828   %     saveas(fig17,'SparaProbeTM01','fig');
+829   %        saveas(fig18,'TotalattenTM01','png');
+830   %     saveas(fig18,'TotalattenTM01','fig');
+
