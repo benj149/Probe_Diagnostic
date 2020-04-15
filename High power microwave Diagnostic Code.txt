@@ -1,3 +1,5 @@
+%This code was written by Ben Crampsey as partial fulfilment of MSc at Strathclyde University
+
 1     clc %clear command window
 2     clear all  % clear workspace
 3     close all 
